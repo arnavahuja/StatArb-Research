@@ -107,6 +107,6 @@ class Config:
     volume: VolumeConfig = field(default_factory=VolumeConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     data_source: str = "yfinance"
-    start_date: str = "2015-01-01"
-    end_date: str = "2023-12-31"
+    start_date: str = "1997-01-01"
+    end_date: str = "2007-12-31"
     tickers: List[str] = field(default_factory=lambda: DEFAULT_TICKERS.copy())

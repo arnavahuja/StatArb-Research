@@ -57,7 +57,7 @@ class PCAFactorModel(FactorModel):
         Returns:
             FactorResult with PCA residuals and eigenportfolio diagnostics.
         """
-        returns_window = returns.iloc[-self.lookback:]
+        returns_window = returns.iloc[-self.lookback:].astype(float)
         tickers = returns_window.columns.tolist()
         N = len(tickers)
 
@@ -108,7 +108,7 @@ class PCAFactorModel(FactorModel):
         top_eigenvalues = eigenvalues[:m]
 
         # Eigenportfolio returns: F_jk = sum_i (v_i^j / sigma_i) * R_ik  (Eq. 9)
-        stds_arr = stds.values
+        stds_arr = np.asarray(stds, dtype=float)
         weights = V / stds_arr[:, np.newaxis]  # (N, m)
 
         factor_returns_arr = returns_window.values @ weights  # (T, m)

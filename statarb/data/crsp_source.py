@@ -40,15 +40,22 @@ class CRSPSource(DataSource):
         return self._conn
 
     def _ticker_to_permno(self, tickers: list[str]) -> pd.DataFrame:
-        """Map ticker symbols to CRSP PERMNOs."""
+        """Map ticker symbols to CRSP PERMNOs (most recent mapping per ticker)."""
         conn = self._connect()
         ticker_str = "', '".join(tickers)
         query = f"""
-            SELECT DISTINCT ticker, permno
+            SELECT DISTINCT ticker, permno, nameenddt
             FROM crsp.stocknames
             WHERE ticker IN ('{ticker_str}')
         """
         mapping = conn.raw_sql(query)
+        # A ticker can map to multiple PERMNOs over time; keep the most recent.
+        mapping = (
+            mapping
+            .sort_values("nameenddt", ascending=False)
+            .drop_duplicates(subset=["ticker"], keep="first")
+            .drop(columns=["nameenddt"])
+        )
         return mapping
 
     def fetch_prices(
@@ -74,13 +81,14 @@ class CRSPSource(DataSource):
             zip(mapping["permno"], mapping["ticker"])
         )
         raw["ticker"] = raw["permno"].map(permno_to_ticker)
+        raw = raw.drop_duplicates(subset=["date", "ticker"], keep="last")
 
         prices = raw.pivot(index="date", columns="ticker", values="adj_price")
         prices.index = pd.to_datetime(prices.index)
         prices = prices[
             [t for t in tickers if t in prices.columns]
         ]
-        prices = prices.ffill().bfill()
+        prices = prices.ffill().bfill().astype(float)
         return prices
 
     def fetch_volume(
@@ -105,11 +113,12 @@ class CRSPSource(DataSource):
             zip(mapping["permno"], mapping["ticker"])
         )
         raw["ticker"] = raw["permno"].map(permno_to_ticker)
+        raw = raw.drop_duplicates(subset=["date", "ticker"], keep="last")
 
         volume = raw.pivot(index="date", columns="ticker", values="volume")
         volume.index = pd.to_datetime(volume.index)
         volume = volume[
             [t for t in tickers if t in volume.columns]
         ]
-        volume = volume.ffill().bfill()
+        volume = volume.ffill().bfill().astype(float)
         return volume

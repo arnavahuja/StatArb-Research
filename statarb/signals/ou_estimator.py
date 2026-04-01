@@ -44,8 +44,8 @@ def fit_ar1(series: np.ndarray) -> tuple[float, float, float] | None:
     if len(series) < 10:
         return None
 
-    X = series[:-1]
-    Y = series[1:]
+    X = np.asarray(series[:-1], dtype=float)
+    Y = np.asarray(series[1:], dtype=float)
 
     mask = np.isfinite(X) & np.isfinite(Y)
     if mask.sum() < 10:

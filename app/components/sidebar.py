@@ -31,10 +31,14 @@ def build_sidebar() -> Config:
 
     col1, col2 = st.sidebar.columns(2)
     start_date = col1.date_input(
-        "Start Date", value=datetime.date(2015, 1, 1)
+        "Start Date",
+        value=datetime.date(1997, 1, 1),
+        min_value=datetime.date(1960, 1, 1),
     )
     end_date = col2.date_input(
-        "End Date", value=datetime.date(2023, 12, 31)
+        "End Date",
+        value=datetime.date(2007, 12, 31),
+        min_value=datetime.date(1960, 1, 1),
     )
 
     st.sidebar.header("Factor Model")
