@@ -221,6 +221,114 @@ def plot_cumulative_pnl(trades: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def plot_regime_proba(
+    regime_proba: pd.Series,
+    equity: pd.Series,
+    entry_threshold: float = 0.5,
+) -> go.Figure:
+    """
+    Plot HMM P(favorable regime) alongside the equity curve.
+
+    Shades periods where the model considers the regime unfavorable
+    (P < entry_threshold) so you can see whether the filter fires at
+    the right times (e.g. during drawdowns).
+    """
+    fig = go.Figure()
+
+    # Equity on secondary y-axis
+    fig.add_trace(go.Scatter(
+        x=equity.index, y=equity.values,
+        mode="lines", name="Equity",
+        line=dict(color="#1f77b4", width=1.5, dash="dot"),
+        yaxis="y2",
+        opacity=0.6,
+    ))
+
+    # Regime probability
+    fig.add_trace(go.Scatter(
+        x=regime_proba.index, y=regime_proba.values,
+        mode="lines", name="P(Favorable)",
+        line=dict(color="#2ca02c", width=2),
+        fill="tozeroy",
+        fillcolor="rgba(44, 160, 44, 0.15)",
+    ))
+
+    # Threshold line
+    fig.add_hline(
+        y=entry_threshold,
+        line_dash="dash",
+        line_color="#d62728",
+        annotation_text=f"Entry threshold ({entry_threshold})",
+        annotation_position="right",
+    )
+
+    # Shade unfavorable periods
+    blocked = regime_proba < entry_threshold
+    in_block = False
+    block_start = None
+    for date, is_blocked in blocked.items():
+        if is_blocked and not in_block:
+            block_start = date
+            in_block = True
+        elif not is_blocked and in_block:
+            fig.add_vrect(
+                x0=block_start, x1=date,
+                fillcolor="rgba(214, 39, 40, 0.10)",
+                layer="below", line_width=0,
+            )
+            in_block = False
+    if in_block and block_start is not None:
+        fig.add_vrect(
+            x0=block_start, x1=regime_proba.index[-1],
+            fillcolor="rgba(214, 39, 40, 0.10)",
+            layer="below", line_width=0,
+        )
+
+    fig.update_layout(
+        title="HMM Regime Probability — P(Favorable / Mean-Reverting)",
+        xaxis_title="Date",
+        yaxis=dict(title="P(Favorable)", range=[0, 1.05]),
+        yaxis2=dict(
+            title="Equity ($)",
+            overlaying="y",
+            side="right",
+            showgrid=False,
+        ),
+        hovermode="x unified",
+        template="plotly_white",
+        legend=dict(x=0.01, y=0.99),
+    )
+    return fig
+
+
+def plot_notional_distribution(daily_positions: pd.DataFrame) -> go.Figure:
+    """
+    Histogram of position notionals — shows whether vol-targeting is
+    creating a spread of sizes (good) or a spike at one value (equal-notional).
+    """
+    if daily_positions.empty or "notional" not in daily_positions.columns:
+        fig = go.Figure()
+        fig.update_layout(title="Position Notional Distribution")
+        return fig
+
+    notionals = daily_positions["notional"].dropna()
+    fig = go.Figure()
+    fig.add_trace(go.Histogram(
+        x=notionals,
+        nbinsx=40,
+        marker_color="#ff7f0e",
+        opacity=0.8,
+        name="Notional",
+    ))
+    fig.update_layout(
+        title="Position Notional Distribution (Vol-Targeting Diagnostic)",
+        xaxis_title="Notional ($)",
+        yaxis_title="Count",
+        template="plotly_white",
+    )
+    return fig
+
+
 def plot_sector_sharpes(trades: pd.DataFrame, sector_mapping: dict) -> go.Figure:
     """Plot per-sector Sharpe ratios."""
     if trades.empty or "pnl" not in trades.columns:

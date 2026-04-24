@@ -19,7 +19,7 @@ from app.components.sidebar import build_sidebar
 from app.components.kpi_cards import render_kpi_cards
 from app.components.charts import (
     plot_equity_curve, plot_drawdown, plot_gross_exposure,
-    plot_sscore_timeseries,
+    plot_sscore_timeseries, plot_regime_proba, plot_notional_distribution,
 )
 
 
@@ -173,6 +173,46 @@ if has_backtest_result():
                 if not ticker_trades.empty:
                     st.write(f"**Trades for {selected_ticker}:**")
                     st.dataframe(ticker_trades, use_container_width=True)
+
+    # ── HMM Regime Diagnostic ─────────────────────────────────────────
+    if config.hmm.enabled and result.regime_proba is not None:
+        st.subheader("HMM Regime Filter")
+        pct_blocked = (result.regime_proba < config.hmm.entry_threshold).mean()
+        st.caption(
+            f"Entry threshold: {config.hmm.entry_threshold} | "
+            f"Days blocked from new entries: {pct_blocked:.1%} of trading days"
+        )
+        st.plotly_chart(
+            plot_regime_proba(
+                result.regime_proba,
+                result.equity_curve,
+                entry_threshold=config.hmm.entry_threshold,
+            ),
+            use_container_width=True,
+        )
+        with st.expander("Regime statistics"):
+            fav = result.regime_proba
+            st.write(f"**Mean P(favorable):** {fav.mean():.3f}")
+            st.write(f"**Days above threshold:** {(fav >= config.hmm.entry_threshold).sum()} / {len(fav)}")
+            st.write(f"**Min P(favorable):** {fav.min():.3f}")
+            st.write(f"**Max P(favorable):** {fav.max():.3f}")
+
+    # ── Vol-Targeting Diagnostic ──────────────────────────────────────
+    if config.vol_target.enabled and not result.daily_positions.empty:
+        st.subheader("Vol-Targeted Sizing Diagnostic")
+        notionals = result.daily_positions["notional"]
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Min Notional", f"${notionals.min():,.0f}")
+        col2.metric("Median Notional", f"${notionals.median():,.0f}")
+        col3.metric("Max Notional", f"${notionals.max():,.0f}")
+        st.caption(
+            f"Notional spread ratio (max/min): {notionals.max()/notionals.min():.1f}× — "
+            "with equal-notional this would be 1×; higher spread means vol-targeting is active."
+        )
+        st.plotly_chart(
+            plot_notional_distribution(result.daily_positions),
+            use_container_width=True,
+        )
 
     st.subheader("Annual Performance")
     eq = result.equity_curve

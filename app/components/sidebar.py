@@ -4,7 +4,8 @@ import streamlit as st
 
 from config import (
     Config, FactorConfig, OUConfig, SignalConfig, VolumeConfig,
-    BacktestConfig, PairsConfig, DEFAULT_TICKERS, DATA_SOURCES,
+    BacktestConfig, PairsConfig, VolTargetConfig, HMMConfig,
+    DEFAULT_TICKERS, DATA_SOURCES,
 )
 
 
@@ -108,6 +109,52 @@ def build_sidebar() -> Config:
     )
     vol_window = st.sidebar.slider("Volume Trailing Window", 5, 30, 10)
 
+    st.sidebar.header("Extensions")
+
+    st.sidebar.markdown("**Vol-Targeted Sizing**")
+    vol_target_enabled = st.sidebar.checkbox(
+        "Enable Vol-Targeting",
+        value=False,
+        help=(
+            "Scales each position's notional inversely with its residual σ_eq, "
+            "so all positions contribute equal risk. The median σ_eq across eligible "
+            "stocks is used as the target, preserving average leverage."
+        ),
+    )
+    vol_floor = 0.2
+    vol_cap = 5.0
+    if vol_target_enabled:
+        col1, col2 = st.sidebar.columns(2)
+        vol_floor = col1.number_input("Min scale (×)", 0.05, 1.0, 0.2, 0.05)
+        vol_cap = col2.number_input("Max scale (×)", 1.0, 10.0, 5.0, 0.5)
+
+    st.sidebar.markdown("**HMM Regime Filter**")
+    hmm_enabled = st.sidebar.checkbox(
+        "Enable HMM Regime Filter",
+        value=False,
+        help=(
+            "Fits a 2-state HMM on cross-sectional residual volatility. "
+            "New entries are blocked when P(favorable regime) < threshold, "
+            "e.g. during trending or crisis periods. Exits always fire regardless."
+        ),
+    )
+    hmm_training_window = 252
+    hmm_feature_window = 20
+    hmm_threshold = 0.5
+    if hmm_enabled:
+        hmm_training_window = st.sidebar.slider(
+            "HMM Training Window (days)", 120, 504, 252,
+            help="Days of history used to fit the HMM before trading starts.",
+        )
+        hmm_feature_window = st.sidebar.slider(
+            "Feature Rolling Window (days)", 5, 60, 20,
+            help="Rolling window for computing cross-sectional vol features.",
+        )
+        hmm_threshold = st.sidebar.slider(
+            "Entry Threshold P(favorable)", 0.1, 0.9, 0.5, 0.05,
+            help="Minimum P(favorable) required to open new positions.",
+        )
+
     st.sidebar.header("Backtest Settings")
     initial_equity = st.sidebar.number_input(
         "Initial Equity ($)", 10_000, 10_000_000, 1_000_000, 100_000
@@ -154,6 +201,17 @@ def build_sidebar() -> Config:
             max_pairs=pairs_max,
             min_half_life=pairs_min_hl,
             max_half_life=pairs_max_hl,
+        ),
+        vol_target=VolTargetConfig(
+            enabled=vol_target_enabled,
+            floor_multiplier=vol_floor,
+            cap_multiplier=vol_cap,
+        ),
+        hmm=HMMConfig(
+            enabled=hmm_enabled,
+            training_window=hmm_training_window,
+            feature_window=hmm_feature_window,
+            entry_threshold=hmm_threshold,
         ),
         data_source=data_source,
         start_date=str(start_date),
